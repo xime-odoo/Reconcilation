@@ -1,0 +1,57 @@
+<odoo>
+	<data>
+		
+
+		<record id="reconcile_history_view_form" model="ir.ui.view">
+			<field name="name">reconcile.history.form</field>
+			<field name="model">reconcile.history</field>
+			<field name="arch" type="xml">
+				 <form >
+					<sheet>
+                        <group>
+	                        <group>
+	                        	<field name="date" />
+	                        	<field name="journal_id" />
+	                        	
+	                        </group>
+	                        <group>
+	                        	<field name="cleared_deposit" />
+	                        	<field name="cleared_payment"/>
+	                        	<field name="open_recon_balance" />
+	                        	<field name="current_recon_balance" />
+	                        	<field name="recon_stmt_balance" />
+	                        	<field name="uncleared_deposit" />
+	                        	<field name="uncleared_payment" />
+	                        	<field name="balance" />
+	                        </group>
+	                    </group>
+					</sheet> 
+				</form>
+			</field>
+		</record>
+	
+		<record id="reconcile_history_tree_view_" model="ir.ui.view">
+			<field name="name">reconcile.history.tree</field>
+			<field name="model">reconcile.history</field>
+			<field name="arch" type="xml">
+				<tree >
+					<field name="date"/>
+					<field name="journal_id"/>
+				</tree> 
+			</field>
+		</record>
+	
+		
+		<record id="action_reconcile_history" model="ir.actions.act_window">
+            <field name="name">Reconcile History</field>
+            <field name="type">ir.actions.act_window</field>
+            <field name="res_model">reconcile.history</field>
+            <field name="view_mode">tree,form</field>
+        </record>
+		
+		
+		<menuitem name="Reconcile History" id="menu_reconcile_history" parent="account.account_reports_management_menu"
+							action="action_reconcile_history"/>
+
+	</data>
+</odoo>

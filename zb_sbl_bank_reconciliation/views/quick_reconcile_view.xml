@@ -1,0 +1,216 @@
+<odoo>
+    <data>
+
+
+        <record id="quick_reconcile_view_form" model="ir.ui.view">
+            <field name="name">quick.reconcile.form</field>
+            <field name="model">quick.reconcile</field>
+            <field name="arch" type="xml">
+                <form>
+                    <header>
+                        <button string="Validate" class="oe_highlight"
+                                name="action_validate" type="object"
+                                attrs="{'invisible': [('state', '=', 'validated')]}"/>
+                        <button name="select_all" type="object" string="select all"
+                                attrs="{'invisible': [('state', '!=', 'draft')]}"/>
+                        <button name="unselect_all" type="object" string="Unselect All"
+                                attrs="{'invisible': [('state', '!=', 'draft')]}"/>
+                        <button string="Cancel"
+                                name="button_cancel" type="object"
+                                attrs="{'invisible': [('state', '!=', 'validated')]}"/>
+                        <field name="state" widget="statusbar" statusbar_visible="draft,validated"/>
+                    </header>
+                    <sheet>
+                        <div class="oe_button_box" name="button_box">
+                            <button name="action_view_journal_entry"
+                                    type="object"
+                                    class="oe_stat_button"
+                                    icon="fa-pencil-square-o"
+                                    attrs="{'invisible': [('move_count', '=', 0)]}">
+                                <field name="move_count" widget="statinfo" string="Journal Entries"/>
+                            </button>
+                        </div>
+                        <group>
+                            <group>
+                                <field name="journal_id"/>
+                                <label for="date_start">Date</label>
+                                <!--<div name="dates" class="o_row">
+                                    <labe>from</labe>
+                                    <field name="date_start" widget="daterange" options="{'related_end_date': 'date'}"
+                                           modifiers="{}" string="date"/>
+                                    <labe>To</labe>
+                                    <field name="date" widget="daterange" options="{'related_start_date': 'date_start'}"
+                                           modifiers="{}"/>
+                                </div>-->
+                                <div name="dates" class="o_row">
+                                    <labe>from</labe>
+                                    <field name="date_start" widget="date"/>
+                                    <labe>To</labe>
+                                    <field name="date" widget="date"/>
+                                </div>
+                                <field name="company_id" groups="base.group_multi_company"/>
+                                <field name="computed_ending_balance" invisible="1"/>
+                                <field name="previous_reconcile_id" invisible="1"/>
+                            </group>
+                            <group>
+                                <label for="balance_start"/>
+                                <div>
+                                    <field name="balance_start" class="oe_inline"/>
+                                </div>
+
+                                <label for="reconcile_ending_balance"/>
+                                <div>
+                                    <field name="reconcile_ending_balance" class="oe_inline" readonly="1"/>
+                                </div>
+                                <label for="bank_statment_balance"/>
+                                <div>
+                                    <field name="bank_statment_balance" class="oe_inline"/>
+                                </div>
+                                <label for="amount_to_reconcile"/>
+                                <div>
+                                    <field name="amount_to_reconcile" class="oe_inline" readonly="1"/>
+                                </div>
+                            </group>
+                        </group>
+                        <notebook>
+                            <page string="Transactions" name="reconcile_line_ids">
+                                <field name="line_ids" nolabel="1" widget="one2many">
+                                    <tree decoration-success="is_reconciled == False" editable="bottom" create="false" edit="true" delete="false"
+                                          limit="50">
+
+                                        <field name="sequence" widget="handle"/>
+                                        <field name="date" force_save="1"/>
+                                        <field name="payment_ref" force_save="1"/>
+                                        <field name="partner_id" force_save="1"/>
+                                        <field name="receipt" sum="Total Receipt" force_save="1"/>
+                                        <field name="payment" sum="Total Payment" force_save="1"/>
+                                        <field name="statement_balance"/>
+                                        <field name="counterpart_aml_id" invisible="1"/>
+                                        <field name="is_reconciled" widget="boolean"/>
+                                        <!--                                    <button name="action_mark"  type="object" help="Check" icon="fa-square-o" attrs="{'invisible':[('is_marked','=',True)]}"/>-->
+                                        <!--                                    <button name="action_unmark"  type="object" help="Uncheck" icon="fa-check" attrs="{'invisible':[('is_marked','!=',True)]}"/>-->
+                                        <field name="is_marked" widget="boolean_toggle" class="text-center"
+                                                attrs="{'invisible':[('is_reconciled','=',True)]}"/>
+<!--                                        <button name="action_mark"-->
+<!--                                                type="object"-->
+<!--                                                icon="fa-square-o"-->
+<!--                                                attrs="{'invisible':[('is_marked','=',True)]}" />-->
+<!--                                        <button name="action_unmark"-->
+<!--                                                type="object"-->
+<!--                                                help="Uncheck"-->
+<!--                                                icon="fa-check"-->
+<!--                                                attrs="{'invisible':[('is_marked','!=',True)]}"/>-->
+<!--                                        <field name="company_id" invisible="1"/>-->
+
+                                    </tree>
+
+                                </field>
+                            </page>
+                            <page string="Manual Operation" name="manual_line_ids">
+                                <field name="manual_line_ids" nolabel="1">
+                                    <tree editable="bottom">
+                                        <field name="date"/>
+                                        <field name="transaction_type"/>
+                                        <field name="partner_id"
+                                               attrs="{'required': [('transaction_type', 'in', ['ap', 'ar'])]}"/>
+                                        <field name="account_id"
+                                               attrs="{'readonly': [('transaction_type', 'in', ['ap', 'ar'])]}"
+                                               force_save="1"/>
+                                        <field name="name" string="Label"/>
+                                        <field name="amount"/>
+
+                                        <field name="move_id" invisible="1"/>
+                                        <field name="company_id" invisible="1"/>
+                                    </tree>
+                                </field>
+                            </page>
+                        </notebook>
+                        <group class="oe_subtotal_footer oe_right" colspan="2" name="sale_total">
+                            <div class="oe_subtotal_footer_separator oe_inline">
+                                <label for="computed_ending_balance"/>
+                            </div>
+                            <field name="computed_ending_balance" nolabel="1" class="oe_subtotal_footer_separator"/>
+
+                            <!--  <label for="balance_end_real"/>
+                             <div>
+                                 <field name="balance_end_real" class="oe_inline" attrs="{'readonly': [('state', '=', 'confirm')]}"/>
+                             </div> -->
+                        </group>
+                    </sheet>
+                    <div class="o_attachment_preview"/>
+                    <div class="oe_chatter">
+                        <field name="message_follower_ids"/>
+                        <field name="message_ids"/>
+                    </div>
+                </form>
+            </field>
+        </record>
+
+        <record id="quick_reconcile_view_tree" model="ir.ui.view">
+            <field name="name">quick.reconcile.tree</field>
+            <field name="model">quick.reconcile</field>
+            <field name="arch" type="xml">
+                <tree>
+                    <field name="date"/>
+                    <field name="journal_id"/>
+                    <field name="state" invisible="1"/>
+                    <field name="balance_start"/>
+                    <field name="reconcile_ending_balance"/>
+                    <field name="bank_statment_balance"/>
+                    <field name="amount_to_reconcile"/>
+                    <field name="state"/>
+                </tree>
+            </field>
+        </record>
+        <record id="quick_reconcile_view_search" model="ir.ui.view">
+            <field name="name">quick.reconcile.search</field>
+            <field name="model">quick.reconcile</field>
+            <field name="arch" type="xml">
+                <search string="Bank Reconcile">
+                    <field name="journal_id" string="Bank"/>
+                    <field name="date"/>
+                    <filter string="New" domain="[('state', '=', 'draft')]" name="new"/>
+                    <filter string="Validated" domain="[('state', '=', 'validated')]" name="validated"/>
+                    <filter string="Cancelled" domain="[('state', '=', 'cancel')]" name="cancelled"/>
+                    <group expand="0" string="Group By">
+                        <filter string="Bank" name="journal_id" domain="[]" context="{'group_by': 'journal_id'}"/>
+                        <filter string="State" name="state" domain="[]" context="{'group_by': 'state'}"/>
+                        <filter string="Date" name="groupby_date" domain="[]" context="{'group_by': 'date'}"/>
+                    </group>
+                </search>
+            </field>
+        </record>
+        <record id="action_quick_reconcile" model="ir.actions.act_window">
+            <field name="name">Bank Reconcile</field>
+            <field name="type">ir.actions.act_window</field>
+            <field name="res_model">quick.reconcile</field>
+            <field name="view_mode">tree,form</field>
+        </record>
+        <record id="action_quick_reconcile_form" model="ir.actions.act_window.view">
+            <field name="sequence" eval="2"/>
+            <field name="view_mode">form</field>
+            <field name="view_id" ref="quick_reconcile_view_form"/>
+            <field name="act_window_id" ref="action_quick_reconcile"/>
+        </record>
+        <record id="action_quick_reconcile_tree" model="ir.actions.act_window.view">
+            <field name="sequence" eval="1"/>
+            <field name="view_mode">tree</field>
+            <field name="view_id" ref="quick_reconcile_view_tree"/>
+            <field name="act_window_id" ref="action_quick_reconcile"/>
+        </record>
+
+        <menuitem name="Quick Bank Reconcile" id="menu_quick_reconcile"
+                  parent="account.menu_finance_entries_accounting_miscellaneous"
+                  action="action_quick_reconcile"/>
+
+
+        <record id="action_move_journal_line_reconcile" model="ir.actions.act_window">
+            <field name="name">Journal Entries</field>
+            <field name="res_model">account.move</field>
+            <field name="view_mode">tree,kanban,form</field>
+            <field name="view_id" ref="account.view_move_tree"/>
+            <field name="search_view_id" ref="account.view_account_move_filter"/>
+        </record>
+
+    </data>
+</odoo>
