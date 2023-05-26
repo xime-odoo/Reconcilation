@@ -10,8 +10,8 @@ class AccountMoveLine(models.Model):
 
     def mark_as_bank_reconciled(self):
         for line in self:
-            line.write({'is_bank_reconciled': True})
+            line.write({'is_bank_reconciled': True, 'reconciled': True})
 
     def unmark_as_bank_reconciled(self):
         for line in self:
-            line.write({'is_bank_reconciled': False})
+            line.write({'is_bank_reconciled': False,'reconciled': False})

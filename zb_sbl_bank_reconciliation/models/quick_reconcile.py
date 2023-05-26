@@ -10,26 +10,6 @@ class QuickReconcile(models.Model):
     _inherit = ['mail.thread', 'mail.activity.mixin']
     _rec_name = 'journal_id'
 
-    @api.depends('line_ids', 'manual_line_ids')
-    def _compute_reconcile_ending_balance(self):
-        for stmt in self:
-            sequence = 0
-            balance = 0
-            for line in stmt.line_ids:
-                if line.is_marked == True and line.sequence > sequence:
-                    balance = line.statement_balance
-                    sequence = line.sequence
-            reconcile_ending_balance = balance + sum(
-                stmt.manual_line_ids.filtered(
-                    lambda x: x.transaction_type in ['ar', 'br']).mapped(
-                    'amount')) - sum(stmt.manual_line_ids.filtered(
-                lambda x: x.transaction_type in ['ap', 'bp', 'conrta']).mapped(
-                'amount'))
-            if reconcile_ending_balance:
-                stmt.reconcile_ending_balance = reconcile_ending_balance
-            else:
-                stmt.reconcile_ending_balance = stmt.balance_start
-
     @api.depends('bank_statment_balance', 'reconcile_ending_balance')
     def _compute_amount_to_reconcile(self):
         for stmt in self:
@@ -58,26 +38,26 @@ class QuickReconcile(models.Model):
                     'counterpart_aml_id.move_id')) + len(
                 self.manual_line_ids.mapped('move_id'))
 
-    @api.onchange('journal_id', 'date', 'date_start')
+    @api.onchange('journal_id', 'date')
     def _onchange_journal_id(self):
-        if self.journal_id and self.date and self.date_start:
-            if self.date < self.date_start:
-                raise ValidationError(_("To date is less than From Date"))
+        if self.journal_id and self.date:
+            # if self.date < self.date_start:
+            #     raise ValidationError(_("To date is less than From Date"))
             self.line_ids = [(5,)]
             values = {}
-            domain = ['|',
-                      # ('parent_state', '=', 'posted'),
-                      # ('account_internal_type', 'in', ('receivable', 'payable')),
-                      # ('reconciled', '=', False),
-                      ('parent_state', '=', 'posted'),
-                      ('account_id', '=', self.journal_id.default_account_id.id),
-                      ('journal_id', '=', self.journal_id.id),
-
-                      ('date', '>=', self.date_start),
-                      ('date', '<=', self.date),
-
-                      ]
-            move_lines = self.env['account.move.line'].search(domain)
+            domain = [
+                # ('account_internal_type', 'in', ('receivable', 'payable')),
+                # ('reconciled', '=', False),
+                ('parent_state', '=', 'posted'),
+                '|',
+                ('account_id', '=', self.journal_id.default_account_id.id),
+                ('journal_id', '=', self.journal_id.id),
+                ('date', '<=', self.date),
+                # ('reconciled', '!=', True),
+                # ('is_bank_reconciled', '!=', True)
+            ]
+            move_lines = self.env['account.move.line'].search(domain,
+                                                              limit=200)
             print(move_lines)
             vals_list = []
             sequence = 1
@@ -92,9 +72,30 @@ class QuickReconcile(models.Model):
                 values['payment'] = line.credit
                 values['line_id'] = line.id
                 values['is_reconciled'] = line.reconciled
+                values['payment_id'] = line.payment_id.id
                 vals_list.append((0, 0, values))
                 sequence += 1
             self.line_ids = vals_list
+
+    @api.depends('line_ids', 'manual_line_ids')
+    def _compute_reconcile_ending_balance(self):
+        for stmt in self:
+            sequence = 0
+            balance = 0
+            for line in stmt.line_ids:
+                if line.is_marked == True and line.sequence > sequence:
+                    balance = line.statement_balance
+                    sequence = line.sequence
+            reconcile_ending_balance = balance + sum(
+                stmt.manual_line_ids.filtered(
+                    lambda x: x.transaction_type in ['ar', 'br']).mapped(
+                    'amount')) - sum(stmt.manual_line_ids.filtered(
+                lambda x: x.transaction_type in ['ap', 'bp', 'conrta']).mapped(
+                'amount'))
+            if reconcile_ending_balance:
+                stmt.reconcile_ending_balance = reconcile_ending_balance
+            else:
+                stmt.reconcile_ending_balance = stmt.balance_start
 
     @api.depends('date', 'journal_id')
     def _get_previous_statement(self):
@@ -156,7 +157,7 @@ class QuickReconcile(models.Model):
     #                            'cancel': [('readonly', True)]}, index=True,
     #                    copy=False, default=fields.Date.context_today)
     date = fields.Date(required=True, string="Date")
-    date_start = fields.Date(required=True, string="Date")
+    # date_start = fields.Date(required=True, string="Date")
     company_id = fields.Many2one('res.company', string='Company',
                                  required=True,
                                  default=lambda self: self.env.company)
@@ -172,6 +173,7 @@ class QuickReconcile(models.Model):
     balance_end = fields.Float()
     reconcile_ending_balance = fields.Float(
         compute="_compute_reconcile_ending_balance")
+
     bank_statment_balance = fields.Float('Bank Statement Balance', states={
         'validated': [('readonly', True)], 'cancel': [('readonly', True)]})
     computed_ending_balance = fields.Float(
@@ -199,6 +201,29 @@ class QuickReconcile(models.Model):
     move_count = fields.Integer(string='Move Count'
                                 , readonly=True)
 
+    def excel_download(self):
+        return {
+            'type': 'ir.actions.act_url',
+            'url': '/quick/reconcile/excel/report/%s' % (self.id),
+            'target': 'new',
+        }
+
+    def get_report_lines(self):
+        vals = {
+            'bank': self.journal_id.name,
+            'todate': self.date,
+            'balance_start': self.balance_start,
+            'bank_statment_balance': self.bank_statment_balance,
+            'balance_end': self.balance_end,
+            'reconcile_ending_balance': self.reconcile_ending_balance
+        }
+        line_vals = self.env['quick.reconcile.line'].search_read(
+            [('reconcile_id', '=', self.id),
+             ('is_marked', '=', False),
+             ('is_reconciled', '=', False)])
+        vals['line_ids'] = line_vals
+        return vals
+
     # compute = '_get_moves_count'
     # TODO add all doamin to get all bank transfers
 
@@ -218,7 +243,8 @@ class QuickReconcile(models.Model):
                     line_ids_list.append((0, 0, {
                         'account_id': payment_id.journal_id.default_account_id.id,
                         'partner_id': payment_id.partner_id.id,
-                        'name': payment_id.name, 'debit': payment_id.amount,
+                        'name': payment_id.name,
+                        'debit': payment_id.amount,
                         'credit': 0.0,
                         'currency_id': payment_id.currency_id.id}))
                     line_ids_list.append((0, 0, {
@@ -414,7 +440,12 @@ class QuickReconcileLine(models.Model):
     receipt = fields.Float(readonly="1")
     payment = fields.Float(readonly="1")
     reconcile_id = fields.Many2one('quick.reconcile')
+    payment_id = fields.Many2one('account.payment')
     is_reconciled = fields.Boolean()
+    parent_state = fields.Selection([
+        ('draft', 'New'),
+        ('validated', 'Validated'),
+        ('cancel', 'Cancelled')], compute="_compute_parent_state")
     is_marked = fields.Boolean(string='check')
     counterpart_aml_id = fields.Many2one('account.move.line')
     statement_balance = fields.Float(compute="_compute_statement_balance",
@@ -423,6 +454,35 @@ class QuickReconcileLine(models.Model):
                                  readonly=True,
                                  default=lambda self: self.env.company)
     line_id = fields.Many2one('account.move.line')
+
+    @api.depends('reconcile_id', 'reconcile_id.state', 'parent_state',
+                 'is_marked')
+    def _compute_parent_state(self):
+        for rec in self:
+            rec.parent_state = rec.reconcile_id.state if rec.reconcile_id else rec.parent_state == 'draft'
+
+    def action_view_transaction(self):
+        return {
+            'name': _('Leads'),
+            'type': 'ir.actions.act_window',
+            'res_model': 'account.move.line',
+            'view_mode': 'tree,form',
+            'domain': [('partner_id', '=', self.partner_id.id),
+                       ('journal_id', '=', self.reconcile_id.journal_id.id),
+                       '|',
+                       ('debit', '=', self.receipt),
+                       ('credit', '=', self.receipt)
+                       ],
+            'context': {'create': False, 'write': False},
+        }
+
+    # @api.onchange('is_marked')
+    # def _onchange_is_marked(self):
+    #     for rec in self:
+    #         if rec.is_marked:
+    #             rec.is_reconciled = True
+    #         else:
+    #             rec.is_reconciled = False
 
     def action_mark(self):
         if not self.is_marked:
@@ -579,9 +639,6 @@ class ManualOperationLine(models.Model):
             move.action_post()
             record.write({'move_id': move.id})
             return move
-
-
-
 
 # domain = ['|',
 #                       # ('parent_state', '=', 'posted'),
